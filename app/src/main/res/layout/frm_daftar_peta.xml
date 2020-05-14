@@ -25,7 +25,47 @@
             android:layout_marginLeft="0dp"
             android:layout_marginRight="0dp"
             android:layout_marginTop="3dp"
-            android:background="#00923F" />
+            android:background="#FF0000" />
+
+        <TableLayout
+            android:id="@+id/daftar_peta_kebun"
+            android:layout_width="match_parent"
+            android:layout_marginLeft="10dp"
+            android:layout_height="wrap_content">
+
+            <TableRow
+                android:id="@+id/tableRow1b1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:gravity="left">
+
+                <TextView
+                    android:layout_height="wrap_content"
+                    android:text="Kebun   "
+                    android:layout_marginTop="10dp"
+                    android:layout_marginBottom="10dp"
+                    android:textStyle="bold"
+                    android:gravity="left|center_horizontal"
+                    android:layout_width="fill_parent" />
+
+                <Spinner
+                    android:id="@+id/daftar_peta_kebun_spinner"
+                    style="@style/Widget.AppCompat.Spinner"
+                    android:layout_width="match_parent"
+                    android:layout_weight="1"
+                    android:layout_height="?attr/dropdownListPreferredItemHeight"
+                    android:background="@drawable/spinner_bg"
+                    android:dropDownWidth="match_parent"
+                    android:dropDownVerticalOffset="?attr/dropdownListPreferredItemHeight"
+                    android:layout_marginTop="5dip"
+                    android:layout_marginBottom="20dip"
+                    android:popupBackground="@android:color/white"
+                    android:popupElevation="3dp"
+                    android:stateListAnimator="@drawable/spinner_sla" />
+
+            </TableRow>
+        </TableLayout>
     </LinearLayout>
 
     <LinearLayout
@@ -42,7 +82,7 @@
             android:layout_marginLeft="0dp"
             android:layout_marginRight="0dp"
             android:layout_marginTop="3dp"
-            android:background="#00923F" />
+            android:background="#FF0000" />
 
         <TableLayout
             android:layout_width="match_parent"
@@ -58,48 +98,42 @@
                 <Button
                     android:id="@+id/daftar_peta_proses"
                     style="?android:attr/buttonStyleSmall"
-                    android:layout_width="100dp"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginLeft="20dp"
                     android:layout_marginRight="20dp"
                     android:layout_marginTop="5dp"
-                    android:background="@color/skyblue"
-                    android:textColor="#fff"
-                    android:textAllCaps="false"
                     android:gravity="center"
                     android:text="Proses" />
 
                 <Button
                     android:id="@+id/daftar_peta_batal"
                     style="?android:attr/buttonStyleSmall"
-                    android:layout_width="100dp"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginLeft="20dp"
                     android:layout_marginRight="20dp"
                     android:layout_marginTop="5dp"
-                    android:background="#FF0000"
-                    android:textColor="#fff"
-                    android:textAllCaps="false"
                     android:gravity="center"
                     android:text="Batal" />
             </TableRow>
         </TableLayout>
-
     </LinearLayout>
 
     <ScrollView
         android:layout_width="fill_parent"
         android:layout_height="fill_parent"
         android:layout_above="@id/footer"
+        android:layout_below="@id/header"
         android:layout_marginLeft="10dp"
         android:layout_marginTop="10dp"
-        android:layout_below="@id/header">
+        android:layout_marginRight="10dp"
+        android:layout_marginBottom="2dp">
 
         <TableLayout
-            android:layout_width="match_parent"
             android:id="@+id/daftar_peta_tl"
-            android:layout_height="wrap_content" >
-        </TableLayout>
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"></TableLayout>
     </ScrollView>
 
 </RelativeLayout>
