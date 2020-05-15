@@ -80,6 +80,7 @@ public class frm_sekitar extends AppCompatActivity {
             @Override
             public void onItemClick(AdapterView<?> adapter, View view, int position, long id) {
                 // TODO Auto-generated method stub
+                if( CustomListViewValuesArr == null ) { return; }
                 frm_sekitar_list clv = CustomListViewValuesArr.get(position);
                 Log.e("FS", String.valueOf(clv.getJarak()));
                 sekitarZoom(clv.getCX(), clv.getCY());
