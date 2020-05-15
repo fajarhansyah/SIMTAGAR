@@ -93,4 +93,12 @@ public class frm_lihatdata extends TabActivity {
             }
         });
     }
+    
+    public void pindahLokasi(String x, String y) {
+        Intent intent1 = new Intent();
+        intent1.putExtra("cx", x);
+        intent1.putExtra("cy", y);
+        setResult(7004, intent1);
+        finish();
+    }
 }
