@@ -43,6 +43,7 @@ import androidx.appcompat.app.AppCompatActivity;
 public class frm_toggle_peta extends AppCompatActivity {
     MySQLLiteHelper sws_db;
     DB_Setting dbsetting;
+    DB_User dbuser;
     TableLayout ll;
     Button btn_ok, btn_cancel;
     CheckBox checkBox;
@@ -69,6 +70,7 @@ public class frm_toggle_peta extends AppCompatActivity {
     private ProgressDialog pDialog;
     public static final int progress_bar_type = 0;
     int banyak_data = 0;
+    int active_kebun = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -80,7 +82,14 @@ public class frm_toggle_peta extends AppCompatActivity {
         btn_cancel = (Button) findViewById(R.id.toggle_peta_batal);
         downloadedid.clear();
 
-        setkml = sws_db.DBKML_Get(0,"",99);
+        dbsetting = sws_db.DBSetting_Get();
+        dbuser = sws_db.DBUSer_Get();
+        if( dbuser.getTingkat() < 3) {
+            setkml = sws_db.DBKML_Get(0, "", 99);
+        } else {
+            setkml = sws_db.DBKML_GetKebun(dbuser.getIDKebun());
+        }
+
         int bbaris = 0;
         for( int i=0; i < setkml.size(); i++ ) {
             akml = setkml.get(i);
@@ -122,6 +131,19 @@ public class frm_toggle_peta extends AppCompatActivity {
 
                 DB_Setting asetting;
                 CheckBox cb;
+                int jml_tampil = 0;
+                for( int i = 0; i < listid.size(); i++ ) {
+                    int dum = (int) listid.get(i);
+                    cb = (CheckBox) findViewById(dum);
+                    glob_iddb = (int) listiddb.get(i);
+                    if (cb.isChecked()) {
+                        jml_tampil = jml_tampil + 1;
+                    }
+                }
+                if( jml_tampil > 2 ) {
+                    Toast.makeText(frm_toggle_peta.this, "Untuk kenyamanan, peta yang ditampilkan sekaligus dibatasi hanya 2 peta saja", Toast.LENGTH_SHORT).show();
+                    return;
+                }
                 for( int i = 0; i < listid.size(); i++ ) {
                     int dum = (int) listid.get(i);
                     cb = (CheckBox) findViewById(dum);
@@ -132,7 +154,6 @@ public class frm_toggle_peta extends AppCompatActivity {
                         sws_db.DBKML_UpdateTampil(glob_iddb, 0);
                     }
                 }
-
                 Intent intent1 = new Intent();
                 setResult(1105, intent1);
                 finish();
