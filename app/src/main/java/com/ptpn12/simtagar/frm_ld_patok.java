@@ -1,7 +1,10 @@
 package com.ptpn12.simtagar;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.os.Bundle;
+import android.view.View;
+import android.widget.AdapterView;
 import android.widget.ListView;
 
 import java.util.ArrayList;
@@ -31,6 +34,16 @@ public class frm_ld_patok extends Activity {
         /**************** Create Custom Adapter *********/
         adapter=new frm_ld_patok_IA( CustomListView, CustomListViewValuesArr );
         list.setAdapter( adapter );
+
+        list.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> adapter, View view, int position, long id) {
+                // TODO Auto-generated method stub
+                if( CustomListViewValuesArr.size() == 0 ) { return; }
+                frm_ld_patok_list clv = CustomListViewValuesArr.get(position);
+                ((frm_lihatdata)getParent()).pindahLokasi(clv.getCx(), clv.getCy());
+            }
+        });
 
     }
 
