@@ -1,10 +1,12 @@
 package com.ptpn12.simtagar;
 
+import android.app.AlertDialog;
 import android.app.Dialog;
 import android.app.DownloadManager;
 import android.app.ProgressDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.database.Cursor;
@@ -15,9 +17,12 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.util.Log;
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.Spinner;
 import android.widget.TableLayout;
 import android.widget.TableRow;
 import android.widget.TextView;
@@ -34,6 +39,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLEncoder;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -45,10 +51,12 @@ import androidx.appcompat.app.AppCompatActivity;
 public class frm_daftar_peta extends AppCompatActivity {
     MySQLLiteHelper sws_db;
     DB_Setting dbsetting;
+    DB_User dbuser;
     TableLayout ll;
     Button btn_ok, btn_cancel;
     CheckBox checkBox;
     TextView tv;
+    Spinner skebun;
 
     EditText ket, lebar;
     List<DB_KML> setkml = new LinkedList<DB_KML>();
@@ -67,12 +75,16 @@ public class frm_daftar_peta extends AppCompatActivity {
     LinkedList downloadedfolder = new LinkedList();
     int glob_idrow, glob_idtoc, glob_idpeta, glob_iddb;
     String glob_folder, glob_nama, glob_folder_komplit;
+    ArrayList<String> idkebun = new ArrayList<String>();
+    ArrayList<String> nmkebun = new ArrayList<String>();
 
     private ProgressDialog pDialog;
     public static final int progress_bar_type = 0;
     int banyak_data = 0;
+    int active_kebun = 0;
+    int tingkat = 0;
 
-    @RequiresApi(api = Build.VERSION_CODES.M)
+	@RequiresApi(api = Build.VERSION_CODES.M)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -81,36 +93,42 @@ public class frm_daftar_peta extends AppCompatActivity {
         TableLayout ll = (TableLayout) findViewById(R.id.daftar_peta_tl);
         btn_ok = (Button) findViewById(R.id.daftar_peta_proses);
         btn_cancel = (Button) findViewById(R.id.daftar_peta_batal);
+        skebun = (Spinner) findViewById(R.id.daftar_peta_kebun_spinner);
         downloadedid.clear();
 
-        registerReceiver(onDownloadComplete,new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
-
-        setkml = sws_db.DBKML_Get(0,"",99);
-        for( int i=0; i < setkml.size(); i++ ) {
-            akml = setkml.get(i);
-            TableRow row= new TableRow(this);
-            TableRow.LayoutParams lp = new TableRow.LayoutParams(TableRow.LayoutParams.WRAP_CONTENT);
-            row.setLayoutParams(lp);
-            checkBox = new CheckBox(this);
-            tv = new TextView(this);
-            checkBox.setText("");
-            anid = View.generateViewId();
-            checkBox.setId(anid);
-            listid.add(anid);
-            listidrow.add(akml.getIDRow());
-            listidpeta.add(akml.getIDPeta());
-            listidtoc.add(akml.getIDTOC());
-            listiddb.add(akml.getID());
-            listnama.add(akml.getNama());
-            String[] separated = akml.getFolder().split("/");
-            listfolder.add(separated[separated.length-1]);
-            listfolderkompit.add(akml.getFolder());
-            checkBox.setButtonTintList(getColorStateList(R.color.hijaudefault));
-            tv.setText(akml.getNama());
-            row.addView(checkBox);
-            row.addView(tv);
-            ll.addView(row,i);
+        idkebun.clear();
+        nmkebun.clear();
+        dbsetting = sws_db.DBSetting_Get();
+        active_kebun = dbsetting.getActiveKebun();
+        if( active_kebun == 0 ) {
+            Toast.makeText( frm_daftar_peta.this, "Definisikan dulu kebun yang aktif", Toast.LENGTH_SHORT).show();
+        } else {
+            List<DB_Ref_Kebun> setkebun = new LinkedList<DB_Ref_Kebun>();
+            setkebun = sws_db.DBRefKebun_Get(active_kebun);
+            for (int iix = 0; iix < setkebun.size(); iix++) {
+                idkebun.add(String.valueOf(setkebun.get(iix).getKode()));
+                nmkebun.add(setkebun.get(iix).getNama());
+            }
+            ArrayAdapter<String> adapter1 = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item, nmkebun);
+            skebun.setAdapter(adapter1);
+            populatepeta(Integer.parseInt(idkebun.get(0)));
         }
+
+        skebun.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                int akode = Integer.parseInt(idkebun.get(position));
+                //populate checkbox
+                populatepeta(akode);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
+        });
+
+
+        registerReceiver(onDownloadComplete,new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
 
         btn_ok.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -118,11 +136,14 @@ public class frm_daftar_peta extends AppCompatActivity {
 
                 DB_Setting asetting;
                 CheckBox cb;
+                Log.e("DOWNLOAD", "Banyak komponen --> " + String.valueOf(listid.size()));
                 for( int i = 0; i < listid.size(); i++ ) {
                     int dum = (int) listid.get(i);
                     cb = (CheckBox) findViewById(dum);
                     if( cb.isChecked()) {
                         //berarti harus download
+                        Log.e("DOWNLOAD", "Komponen id checbox --> " + String.valueOf(dum));
+                        Log.e("DOWNLOAD", "Komponen ke i yang kena check --> " + String.valueOf(i));
                         String anama = (String) listnama.get(i);
                         glob_iddb = (int) listiddb.get(i);
                         glob_idrow = (int) listidrow.get(i);
@@ -131,7 +152,33 @@ public class frm_daftar_peta extends AppCompatActivity {
                         glob_nama = (String) listnama.get(i);
                         glob_folder = (String) listfolder.get(i);
                         glob_folder_komplit = (String) listfolderkompit.get(i);
-                        beginDownload(glob_iddb, glob_idrow, glob_idtoc, glob_idpeta, glob_nama, glob_folder, glob_folder_komplit);
+
+                        //check file dulu
+                        final File file=new File(getExternalFilesDir(null), glob_folder);
+                        if( file.exists()) {
+                            AlertDialog.Builder alertDialogBuilder;
+                            AlertDialog alertDialog;
+                            alertDialogBuilder = new AlertDialog.Builder(frm_daftar_peta.this);
+                            alertDialogBuilder.setTitle("SIMTAGAR");
+                            alertDialogBuilder.setMessage("Berkas KML sudah ada. Overwrite berkas KML?");
+                            alertDialogBuilder.setCancelable(false);
+                            alertDialogBuilder.setPositiveButton("Ya",new DialogInterface.OnClickListener() {
+                                public void onClick(DialogInterface dialog,int id) {
+                                    //map_main.this.finish();
+                                    file.delete();
+                                    beginDownload(glob_iddb, glob_idrow, glob_idtoc, glob_idpeta, glob_nama, glob_folder, glob_folder_komplit);
+                                }
+                            });
+                            alertDialogBuilder.setNegativeButton("Tidak",new DialogInterface.OnClickListener() {
+                                public void onClick(DialogInterface dialog,int id) {
+                                    dialog.cancel();
+                                }
+                            });
+                            alertDialog = alertDialogBuilder.create();
+                            alertDialog.show();
+                        } else {
+                            beginDownload(glob_iddb, glob_idrow, glob_idtoc, glob_idpeta, glob_nama, glob_folder, glob_folder_komplit);
+                        }
                     }
                 }
 
@@ -154,6 +201,51 @@ public class frm_daftar_peta extends AppCompatActivity {
     public void onDestroy() {
         super.onDestroy();
         unregisterReceiver(onDownloadComplete);
+    }
+
+    private void populatepeta(int akebun) {
+        ll = (TableLayout) findViewById(R.id.daftar_peta_tl);
+        Log.e("POPULATE PETA", "Kebun -- >" + String.valueOf(akebun));
+        setkml = sws_db.DBKML_GetKebun(akebun);
+        listid.clear();
+        listidrow.clear();
+        listidpeta.clear();
+        listidtoc.clear();
+        listiddb.clear();
+        listnama.clear();
+        listfolder.clear();
+        listfolderkompit.clear();
+
+
+        if( ll != null ) {
+            int childCount = ll.getChildCount();
+            ll.removeViews(0, childCount);
+        }
+        for( int i=0; i < setkml.size(); i++ ) {
+            akml = setkml.get(i);
+            TableRow row= new TableRow(this);
+            TableRow.LayoutParams lp = new TableRow.LayoutParams(TableRow.LayoutParams.WRAP_CONTENT);
+            row.setLayoutParams(lp);
+            checkBox = new CheckBox(this);
+            tv = new TextView(this);
+            checkBox.setText("");
+            anid = View.generateViewId();
+            checkBox.setId(anid);
+            listid.add(anid);
+            listidrow.add(akml.getIDRow());
+            listidpeta.add(akml.getIDPeta());
+            listidtoc.add(akml.getIDTOC());
+            listiddb.add(akml.getID());
+            listnama.add(akml.getNama());
+            String[] separated = akml.getFolder().split("/");
+            listfolder.add(separated[separated.length-1]);
+            listfolderkompit.add(akml.getFolder());
+
+            tv.setText(akml.getNama());
+            row.addView(checkBox);
+            row.addView(tv);
+            ll.addView(row,i);
+        }
     }
 
 
@@ -204,12 +296,7 @@ public class frm_daftar_peta extends AppCompatActivity {
         } else {
             alamat = alamat + "/" + dbsetting.getVd() + "/mob_peta.php";
         }
-        //alamat = alamat + "/data/" + folderkomplit;
-        Log.e("FDP", alamat);
-
         alamat = alamat + "?id=" + String.valueOf(idrow) + "&idtoc=" + String.valueOf(idtoc) + "&idpeta=" + String.valueOf(idpeta);
-        //alamat = "http://103.253.107.79/data/so/so_01.kml";
-        //alamat = "http://www.gadgetsaint.com/wp-content/uploads/2016/11/cropped-web_hi_res_512.png";
         DownloadManager.Request request=new DownloadManager.Request(Uri.parse(alamat))
                 .setTitle(nama)// Title of the Download Notification
                 .setDescription("Sedang melakukan pengunduhan")// Description of the Download Notification
@@ -224,40 +311,5 @@ public class frm_daftar_peta extends AppCompatActivity {
         downloadediddb.add(iddb);
         downloadedfolder.add(folder);
         banyak_data = banyak_data + 1;
-
-        /* ----------------------- gak kepake
-        DownloadManager.Query query = null;
-        Cursor c = null;
-        query = new DownloadManager.Query();
-        if(query!=null) {
-            query.setFilterByStatus(DownloadManager.STATUS_FAILED|DownloadManager.STATUS_PAUSED|DownloadManager.STATUS_SUCCESSFUL|
-                    DownloadManager.STATUS_RUNNING|DownloadManager.STATUS_PENDING);
-        } else {
-            return;
-        }
-        c = downloadManager.query(query);
-        if(c.moveToFirst()) {
-            int status = c.getInt(c.getColumnIndex(DownloadManager.COLUMN_STATUS));
-            switch (status) {
-                case DownloadManager.STATUS_PAUSED:
-                    Toast.makeText(getApplicationContext(), "Paused", Toast.LENGTH_SHORT).show();
-                    break;
-                case DownloadManager.STATUS_PENDING:
-                    Toast.makeText(getApplicationContext(), "Pending", Toast.LENGTH_SHORT).show();
-                    break;
-                case DownloadManager.STATUS_RUNNING:
-                    Toast.makeText(getApplicationContext(), "Running", Toast.LENGTH_SHORT).show();
-                    break;
-                case DownloadManager.STATUS_SUCCESSFUL:
-                    Toast.makeText(getApplicationContext(), "Sukses", Toast.LENGTH_SHORT).show();
-                    break;
-                case DownloadManager.STATUS_FAILED:
-                    Toast.makeText(getApplicationContext(), "Failed", Toast.LENGTH_SHORT).show();
-                    break;
-            }
-        } else {
-            Toast.makeText(getApplicationContext(), "KOSONG", Toast.LENGTH_SHORT).show();
-        }
-        ----------------------------------------------------- */
     }
 }
