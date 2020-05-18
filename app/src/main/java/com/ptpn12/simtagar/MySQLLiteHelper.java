@@ -224,7 +224,7 @@ public class MySQLLiteHelper extends SQLiteOpenHelper {
             "adab", "adap", "cxb", "cyb", "cxp", "cyp", "waktub", "waktup", "kirim"};
     private static final String TBL_ABSENSI_DB = "create table tbl_absensi (idrow integer, idpek text, idmandor integer, tgl text, "
         + "jamb text, jamp text, lokasi text, fotob text, fotop text, adab integer, adap integer, cxb text, cyb text, cxp text, "
-        + "cyp text, waktub text, waktup text, int kirim);";
+        + "cyp text, waktub text, waktup text, kirim integer);";
 
 
     public MySQLLiteHelper(Context context) {
