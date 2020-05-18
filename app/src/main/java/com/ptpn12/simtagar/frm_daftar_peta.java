@@ -15,6 +15,7 @@ import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.PowerManager;
 import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
@@ -32,10 +33,13 @@ import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.ProtocolException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLEncoder;
@@ -83,8 +87,9 @@ public class frm_daftar_peta extends AppCompatActivity {
     int banyak_data = 0;
     int active_kebun = 0;
     int tingkat = 0;
+    ProgressDialog mProgressDialog;
 
-	@RequiresApi(api = Build.VERSION_CODES.M)
+    @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -95,6 +100,12 @@ public class frm_daftar_peta extends AppCompatActivity {
         btn_cancel = (Button) findViewById(R.id.daftar_peta_batal);
         skebun = (Spinner) findViewById(R.id.daftar_peta_kebun_spinner);
         downloadedid.clear();
+
+        mProgressDialog = new ProgressDialog(frm_daftar_peta.this);
+        mProgressDialog.setMessage("Sedang melakukan pengunduhan peta. Mohon tunggu...");
+        mProgressDialog.setIndeterminate(true);
+        mProgressDialog.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
+        mProgressDialog.setCancelable(true);
 
         idkebun.clear();
         nmkebun.clear();
@@ -127,23 +138,17 @@ public class frm_daftar_peta extends AppCompatActivity {
             }
         });
 
-
-        registerReceiver(onDownloadComplete,new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
-
         btn_ok.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View arg0) {
 
                 DB_Setting asetting;
                 CheckBox cb;
-                Log.e("DOWNLOAD", "Banyak komponen --> " + String.valueOf(listid.size()));
                 for( int i = 0; i < listid.size(); i++ ) {
                     int dum = (int) listid.get(i);
                     cb = (CheckBox) findViewById(dum);
                     if( cb.isChecked()) {
                         //berarti harus download
-                        Log.e("DOWNLOAD", "Komponen id checbox --> " + String.valueOf(dum));
-                        Log.e("DOWNLOAD", "Komponen ke i yang kena check --> " + String.valueOf(i));
                         String anama = (String) listnama.get(i);
                         glob_iddb = (int) listiddb.get(i);
                         glob_idrow = (int) listidrow.get(i);
@@ -152,6 +157,15 @@ public class frm_daftar_peta extends AppCompatActivity {
                         glob_nama = (String) listnama.get(i);
                         glob_folder = (String) listfolder.get(i);
                         glob_folder_komplit = (String) listfolderkompit.get(i);
+
+                        dbsetting = sws_db.DBSetting_Get();
+                        //beginDownload(glob_iddb, glob_idrow, glob_idtoc, glob_idpeta, glob_nama, glob_folder, glob_folder_komplit);
+                        String alamat = "http://" + dbsetting.getWebip();
+                        if( dbsetting.getVd().equals("")) {
+                            alamat = alamat + "/mob_peta.php";
+                        } else {
+                            alamat = alamat + "/" + dbsetting.getVd() + "/mob_peta.php";
+                        }
 
                         //check file dulu
                         final File file=new File(getExternalFilesDir(null), glob_folder);
@@ -166,7 +180,14 @@ public class frm_daftar_peta extends AppCompatActivity {
                                 public void onClick(DialogInterface dialog,int id) {
                                     //map_main.this.finish();
                                     file.delete();
-                                    beginDownload(glob_iddb, glob_idrow, glob_idtoc, glob_idpeta, glob_nama, glob_folder, glob_folder_komplit);
+                                    try {
+
+                                        doGetPeta(String.valueOf(glob_iddb), String.valueOf(glob_idrow), String.valueOf(glob_idtoc),
+                                                String.valueOf(glob_idpeta), glob_nama, glob_folder, glob_folder_komplit);
+                                    } catch (InterruptedException e) {
+                                        e.printStackTrace();
+                                    }
+                                    //beginDownload(glob_iddb, glob_idrow, glob_idtoc, glob_idpeta, glob_nama, glob_folder, glob_folder_komplit);
                                 }
                             });
                             alertDialogBuilder.setNegativeButton("Tidak",new DialogInterface.OnClickListener() {
@@ -177,7 +198,13 @@ public class frm_daftar_peta extends AppCompatActivity {
                             alertDialog = alertDialogBuilder.create();
                             alertDialog.show();
                         } else {
-                            beginDownload(glob_iddb, glob_idrow, glob_idtoc, glob_idpeta, glob_nama, glob_folder, glob_folder_komplit);
+                            try {
+                                doGetPeta(String.valueOf(glob_iddb), String.valueOf(glob_idrow), String.valueOf(glob_idtoc),
+                                        String.valueOf(glob_idpeta), glob_nama, glob_folder, glob_folder_komplit);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                            //beginDownload(glob_iddb, glob_idrow, glob_idtoc, glob_idpeta, glob_nama, glob_folder, glob_folder_komplit);
                         }
                     }
                 }
@@ -200,7 +227,6 @@ public class frm_daftar_peta extends AppCompatActivity {
     @Override
     public void onDestroy() {
         super.onDestroy();
-        unregisterReceiver(onDownloadComplete);
     }
 
     private void populatepeta(int akebun) {
@@ -249,40 +275,6 @@ public class frm_daftar_peta extends AppCompatActivity {
     }
 
 
-    private BroadcastReceiver onDownloadComplete = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            //Fetching the download id received with the broadcast
-            long id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
-            //Checking if the received broadcast is for our enqueued download by matching download id
-            for( int i = 0; i < downloadedid.size(); i++ ) {
-                long dumid = (long) downloadedid.get(i);
-                Log.e("FDP Complete", String.valueOf(dumid) + " === " + String.valueOf(id));
-                if( dumid == id ) {
-                    List<DB_KML> dumsetkml = new LinkedList<DB_KML>();
-                    int iddb = (int) downloadediddb.get(i);
-                    String folder = (String) downloadedfolder.get(i);
-                    Log.e("FDP ODC", folder);
-                    dumsetkml = sws_db.DBKML_Get(iddb,"",99);
-                    for( int j = 0; j < dumsetkml.size(); j++ ) {
-                        DB_KML dk = dumsetkml.get(j);
-                        sws_db.DBKML_Update(iddb, dk.getNama(), dk.getIDKebun(), dk.getIDRow(),
-                                dk.getIDTOC(), dk.getIDPeta(), dk.getFolder(), dk.getTampil(), 1);
-                        File file=new File(getExternalFilesDir(null), folder);
-                        long asize = file.length();
-                        Toast.makeText(getApplicationContext(), "Peta " + dk.getNama() + " selesai diunduh (" + String.valueOf(asize) + " byte)", Toast.LENGTH_SHORT).show();
-                    }
-                    banyak_data = banyak_data - 1;
-                    if( banyak_data <= 0 ) {
-                        //Intent intent1 = new Intent();
-                        //setResult(1104, intent1);
-                        finish();
-                    }
-                }
-            }
-        }
-    };
-
     private void beginDownload(int iddb, int idrow, int idtoc, int idpeta, String nama, String folder, String folderkomplit){
         File file=new File(getExternalFilesDir(null), folder);
         Log.e("DP", String.valueOf(file));
@@ -312,4 +304,131 @@ public class frm_daftar_peta extends AppCompatActivity {
         downloadedfolder.add(folder);
         banyak_data = banyak_data + 1;
     }
+
+    private PowerManager.WakeLock mWakeLock;
+
+    private void doGetPeta(String iddb, String idrow, String idtoc, String idpeta, String nama, String folder, String folderkomplit) throws InterruptedException {
+
+        class doGetPetaAsync extends AsyncTask<String, Void, String> {
+
+            @Override
+            protected String doInBackground(String... params) {
+                String iddb = params[0];
+                String idrow = params[1];
+                String idtoc = params[2];
+                String idpeta = params[3];
+                String nama = params[4];
+                String folder = params[5];
+                String folderkomplit = params[6];
+                dbsetting = sws_db.DBSetting_Get();
+                String alamat = "http://" + dbsetting.getWebip();
+                if( dbsetting.getVd().equals("")) {
+                    alamat = alamat + "/mob_peta.php";
+                } else {
+                    alamat = alamat + "/" + dbsetting.getVd() + "/mob_peta.php";
+                }
+                try {
+                    URL url = new URL(alamat);
+                    Map<String, Object> params1 = new LinkedHashMap<>();
+                    params1.put("id", idrow);
+                    params1.put("idtoc", idtoc);
+                    params1.put("idpeta", idpeta);
+
+                    StringBuilder postData = new StringBuilder();
+                    for (Map.Entry<String, Object> param : params1.entrySet()) {
+                        if (postData.length() != 0) postData.append('&');
+                        postData.append(URLEncoder.encode(param.getKey(), "UTF-8"));
+                        postData.append('=');
+                        postData.append(URLEncoder.encode(String.valueOf(param.getValue()), "UTF-8"));
+                    }
+                    byte[] postDataBytes = postData.toString().getBytes("UTF-8");
+
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("POST");
+                    conn.setDoOutput(true);
+                    conn.getOutputStream().write(postDataBytes);
+
+                    File file=new File(getExternalFilesDir(null), folder);
+                    if (!file.exists()) {
+                        file.createNewFile();
+                        Log.e("FDP", "File Created");
+                    }
+
+                    FileOutputStream fos = new FileOutputStream(file);//Get OutputStream for NewFile Location
+                    InputStream is = conn.getInputStream();//Get InputStream for connection
+
+                    byte[] buffer = new byte[1024];//Set buffer type
+                    int len1 = 0;//init length
+                    while ((len1 = is.read(buffer)) != -1) {
+                        fos.write(buffer, 0, len1);//Write new file
+                    }
+
+                    //Close all connection after doing task
+                    fos.close();
+                    is.close();
+                    List<DB_KML> dumsetkml = new LinkedList<DB_KML>();
+                    dumsetkml = sws_db.DBKML_Get(Integer.parseInt(iddb),"",99);
+                    for( int j = 0; j < dumsetkml.size(); j++ ) {
+                        DB_KML dk = dumsetkml.get(j);
+                        sws_db.DBKML_Update(Integer.parseInt(iddb), dk.getNama(), dk.getIDKebun(), dk.getIDRow(),
+                                dk.getIDTOC(), dk.getIDPeta(), dk.getFolder(), dk.getTampil(), 1);
+                        File file1=new File(getExternalFilesDir(null), folder);
+                        long asize = file1.length();
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                Toast.makeText(getApplicationContext(), "Peta " + dk.getNama() + " selesai diunduh (" + String.valueOf(asize) + " byte)", Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    }
+
+                } catch (MalformedURLException e) {
+                    Log.e("FDP", "MalformedURLException: " + e.getMessage());
+                } catch (ProtocolException e) {
+                    Log.e("FDP", "ProtocolException: " + e.getMessage());
+                } catch (IOException e) {
+                    Log.e("FDP", "IOException: " + e.getMessage());
+                } catch (Exception e) {
+                    Log.e("FDP", "Exception: " + e.getMessage());
+                }
+
+
+
+                return null;
+            }
+
+            @Override
+            protected void onPreExecute() {
+                super.onPreExecute();
+                PowerManager pm = (PowerManager) getApplicationContext().getSystemService(Context.POWER_SERVICE);
+                mWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
+                        getClass().getName());
+                mWakeLock.acquire();
+                banyak_data = banyak_data + 1;
+                if( !mProgressDialog.isShowing() ) {
+                    mProgressDialog.show();
+                }
+            }
+
+            @Override
+            protected void onPostExecute(String result) {
+                super.onPostExecute(result);
+                banyak_data = banyak_data - 1;
+                if( banyak_data <= 0) {
+                    mProgressDialog.dismiss();
+                    finish();
+                }
+            }
+        }
+
+        doGetPetaAsync doGetPetaAsync = new doGetPetaAsync();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
+            doGetPetaAsync.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, iddb, idrow, idtoc, idpeta, nama, folder, folderkomplit);
+        } else {
+            doGetPetaAsync.execute(iddb, idrow, idtoc, idpeta, nama, folder, folderkomplit);
+        }
+    }
+
+
+
 }
