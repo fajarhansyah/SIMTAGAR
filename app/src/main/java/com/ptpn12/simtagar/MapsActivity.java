@@ -51,10 +51,12 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Looper;
 import android.provider.MediaStore;
+import android.text.Html;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.webkit.WebView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
@@ -86,7 +88,12 @@ import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 import com.github.clans.fab.FloatingActionButton;
 import com.google.android.material.navigation.NavigationView;
-import com.google.maps.android.kml.KmlLayer;
+import com.google.maps.android.collections.GroundOverlayManager;
+import com.google.maps.android.collections.MarkerManager;
+import com.google.maps.android.collections.PolygonManager;
+import com.google.maps.android.collections.PolylineManager;
+import com.google.maps.android.data.Feature;
+import com.google.maps.android.data.kml.KmlLayer;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -159,6 +166,11 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
      * reference : https://dedykuncoro.com/2016/03/membuat-navigation-drawer-menu-android.html
      */
 
+    MarkerManager markerManager;
+    GroundOverlayManager groundOverlayManager;
+    PolygonManager polygonManager;
+    PolylineManager polylineManager;
+
     DrawerLayout drawer;
     NavigationView navigationView;
 
@@ -226,18 +238,10 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         peta_jenis3 = (RadioButton) findViewById(R.id.peta_peta3);
         peta_jenis4 = (RadioButton) findViewById(R.id.peta_peta4);
 
-        if (dbsetting.getJMap() == 1) {
-            peta_jenis1.setChecked(true);
-        }
-        if (dbsetting.getJMap() == 2) {
-            peta_jenis2.setChecked(true);
-        }
-        if (dbsetting.getJMap() == 3) {
-            peta_jenis3.setChecked(true);
-        }
-        if (dbsetting.getJMap() == 4) {
-            peta_jenis4.setChecked(true);
-        }
+        if (dbsetting.getJMap() == 1) { peta_jenis1.setChecked(true); }
+        if (dbsetting.getJMap() == 2) { peta_jenis2.setChecked(true); }
+        if (dbsetting.getJMap() == 3) { peta_jenis3.setChecked(true); }
+        if (dbsetting.getJMap() == 4) { peta_jenis4.setChecked(true); }
         peta_tr1.setVisibility(View.GONE);
 
 
@@ -338,14 +342,10 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     }
 
                     //Adding the created the marker on the map
-                    if (myposition != null) {
-                        myposition.remove();
-                    }
+                    if (myposition != null) { myposition.remove(); }
                     myposition = mMap.addMarker(markerOptions);
                 }
-            }
-
-            ;
+            };
         };
 
 
@@ -680,7 +680,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     protected void onResume() {
         super.onResume();
         List<DB_Ref_Kebun> kaktif = new LinkedList<DB_Ref_Kebun>();
-
         if (dbsetting.getActiveKebun() == 0) {
             tv_jab.setText("Kebun : [Belum didefinisikan]");
         } else {
@@ -726,6 +725,11 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         Double y = -7.2348727;
         LatLng latLng = new LatLng(y, x);
         mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 15f));
+
+        markerManager = new MarkerManager(mMap);
+        groundOverlayManager = new GroundOverlayManager(mMap);
+        polygonManager = new PolygonManager(mMap);
+        polylineManager = new PolylineManager(mMap);
 
         //sws_x = currentLocation.getLongitude();
         //sws_y = currentLocation.getLatitude();
@@ -957,14 +961,12 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             AlertDialog alertDialog = alertDialogBuilder.create();
             alertDialog.show();
         }
-
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         Log.e("OAR", String.valueOf(requestCode));
-
         if (requestCode == 7002) {
             try {
                 tampilkan_kml();
@@ -985,7 +987,32 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 }
             }
         }
+        if( requestCode == 7010 ) {
+            //dari lihat data
+            Log.e("MAINACT", "Masuk sini");
+            if( data == null ) {
+                Log.e("MAINACT", "DATA ISNULL");
+                return;
+            }
+            String return_x = data.getExtras().getString("cx");
+            String return_y = data.getExtras().getString("cy");
+            Log.e("MAINACT", "CX, CY --> " + return_x + ", " + return_y);
+            int anicon = R.drawable.red_circle;
+            if( marker_circle != null ) {
+                //remove dulu
+                marker_circle.remove();
+            }
+            LatLng point_terpilih = new LatLng(Double.parseDouble(return_y), Double.parseDouble(return_x));
+            marker_circle = mMap.addMarker(new MarkerOptions()
+                    .position(point_terpilih)
+                    .title("Obyek terpilih")
+                    .anchor(0.5f, 1.0f)
+                    .draggable(false)
+                    .icon(BitmapDescriptorFactory.fromResource(anicon)));
+            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(point_terpilih, 18f));
+        }
         if (requestCode == 7004) {
+            if( data == null ) { return; }
             glob_sekitar_jarak = data.getExtras().getString("jarak");
             glob_sekitar_mulai = data.getExtras().getString("mulai");
             if (resultCode == 7004) {
@@ -1013,70 +1040,22 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 //ada perubahan
                 dbsetting = sws_db.DBSetting_Get();
                 //Toast.makeText(getApplicationContext(),String.valueOf(dbsetting.getTampilGeotag()), Toast.LENGTH_SHORT).show();
-                if (dbsetting.getJMap() == 1) {
-                    peta_jenis1.setChecked(true);
-                }
-                if (dbsetting.getJMap() == 2) {
-                    peta_jenis2.setChecked(true);
-                }
-                if (dbsetting.getJMap() == 3) {
-                    peta_jenis3.setChecked(true);
-                }
-                if (dbsetting.getJMap() == 4) {
-                    peta_jenis4.setChecked(true);
-                }
+                if (dbsetting.getJMap() == 1) { peta_jenis1.setChecked(true); }
+                if (dbsetting.getJMap() == 2) { peta_jenis2.setChecked(true); }
+                if (dbsetting.getJMap() == 3) { peta_jenis3.setChecked(true); }
+                if (dbsetting.getJMap() == 4) { peta_jenis4.setChecked(true); }
                 mMap.setMapType(dbsetting.getJMap());
 
-                if (dbsetting.getTampilKejadian() == 1) {
-                    tampilkan_kejadian();
-                } else {
-                    sembunyi_kejadian();
-                }
-                if (dbsetting.getTampilPatok() == 1) {
-                    tampilkan_patok();
-                } else {
-                    sembunyi_patok();
-                }
-                if (dbsetting.getTampilPekerjaan() == 1) {
-                    tampilkan_pekerjaan();
-                } else {
-                    sembunyi_pekerjaan();
-                }
-                if (dbsetting.getTampilAktifitas() == 1) {
-                    tampilkan_aktifitas();
-                } else {
-                    sembunyi_aktifitas();
-                }
-                if (dbsetting.getTampilJalan() == 1) {
-                    tampilkan_jalan();
-                } else {
-                    sembunyi_jalan();
-                }
-                if (dbsetting.getTampilJembatan() == 1) {
-                    tampilkan_jembatan();
-                } else {
-                    sembunyi_jembatan();
-                }
-                if (dbsetting.getTampilTanaman() == 1) {
-                    tampilkan_tanaman();
-                } else {
-                    sembunyi_tanaman();
-                }
-                if (dbsetting.getTampilObyek() == 1) {
-                    tampilkan_obyek();
-                } else {
-                    sembunyi_obyek();
-                }
-                if (dbsetting.getTampilSaluran() == 1) {
-                    tampilkan_saluran();
-                } else {
-                    sembunyi_saluran();
-                }
-                if (dbsetting.getTampilGeotag() == 1) {
-                    tampilkan_geotag();
-                } else {
-                    sembunyi_geotag();
-                }
+                if( dbsetting.getTampilKejadian() == 1 ) { tampilkan_kejadian(); } else { sembunyi_kejadian(); }
+                if( dbsetting.getTampilPatok() == 1 ) { tampilkan_patok(); } else { sembunyi_patok(); }
+                if( dbsetting.getTampilPekerjaan() == 1 ) { tampilkan_pekerjaan(); } else { sembunyi_pekerjaan(); }
+                if( dbsetting.getTampilAktifitas() == 1 ) { tampilkan_aktifitas(); } else { sembunyi_aktifitas(); }
+                if( dbsetting.getTampilJalan() == 1 ) { tampilkan_jalan(); } else { sembunyi_jalan(); }
+                if( dbsetting.getTampilJembatan() == 1 ) { tampilkan_jembatan(); } else { sembunyi_jembatan(); }
+                if( dbsetting.getTampilTanaman() == 1 ) { tampilkan_tanaman(); } else { sembunyi_tanaman(); }
+                if( dbsetting.getTampilObyek() == 1 ) { tampilkan_obyek(); } else { sembunyi_obyek(); }
+                if( dbsetting.getTampilSaluran() == 1 ) { tampilkan_saluran(); } else { sembunyi_saluran(); }
+                if( dbsetting.getTampilGeotag() == 1 ) { tampilkan_geotag(); } else { sembunyi_geotag(); }
 
             }
         }
@@ -1517,50 +1496,102 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     private void sembunyikan_kml() {
         KmlLayer alayer;
-        for (int i = kmllayerlist.size() - 1; i >= 0; i--) {
+        Log.e("SEMBUNYIKAN", "Jumlah layer --> " + String.valueOf(kmllayerlist.size()));
+        int i = kmllayerlist.size()-1;
+        while ( i >= 0 ) {
             alayer = kmllayerlist.get(i);
-            Log.e("MA Sembunyi KML ", String.valueOf(i) + " --> " + String.valueOf(alayer));
             alayer.removeLayerFromMap();
+            kmllayerlist.remove(i);
+            kmlnama.remove(i);
+            kmlidlist.remove(i);
+            i = i - 1;
         }
+        mMap.clear();
         kmllayerlist.clear();
         kmlnama.clear();
         kmltampil.clear();
         kmlidlist.clear();
     }
 
+    private void sembunyikan(String nama) {
+        KmlLayer alayer;
+        Log.e("SEMBUNYIKAN", "Jumlah layer awal --> " + String.valueOf(kmllayerlist.size()));
+        boolean ketemu = false;
+        int i = kmllayerlist.size()-1;
+        while( i >= 0 && !ketemu ) {
+            if( kmlnama.get(i).equals(nama)) {
+                ketemu = true;
+            } else {
+                i = i - 1;
+            }
+        }
+        if( ketemu ) {
+            alayer = kmllayerlist.get(i);
+            alayer.removeLayerFromMap();
+            kmllayerlist.remove(i);
+            kmlnama.remove(i);
+            kmlidlist.remove(i);
+        }
+        Log.e("SEMBUNYIKAN", "Jumlah layer akhir --> " + String.valueOf(kmllayerlist.size()));
+    }
+
     private void tampilkan_kml() throws IOException, XmlPullParserException {
         sembunyikan_kml();
         List<DB_KML> setkml = new LinkedList<DB_KML>();
-        setkml = sws_db.DBKML_Get(0, "", 1);
+        setkml = sws_db.DBKML_Get(0,"",1);
+        for( int i = 0; i < setkml.size(); i++ ) {
+            Log.e("MA DAFTAR KML", String.valueOf(setkml.get(i).getID() + ":::" + setkml.get(i).getNama() + ":::" + String.valueOf(setkml.get(i).getTampil())));
+        }
         DB_KML dbkml;
         Log.e("MA Tampil KML", String.valueOf(setkml.size()));
-        for (int i = 0; i < setkml.size(); i++) {
+        for( int i = 0; i < setkml.size(); i++ ) {
             dbkml = setkml.get(i);
             int idkml = dbkml.getID();
             String dum = dbkml.getFolder();
             String namalayer = dbkml.getNama();
             String[] sep = dum.split("/");
-            String namaasli = sep[sep.length - 1];
-            if (dbkml.getSudah() == 1) {
-                File file = new File(getExternalFilesDir(null), namaasli);
-                if (file.exists()) {
-                    Log.e("MA Tampilkan KML", "Ketemu");
+            String namaasli = sep[sep.length-1];
+            //Log.e("MA TAMBAH", "ID KML --> " + String.valueOf(idkml));
+            //Log.e("MA TAMBAH", "dum --> " + dum);
+            //Log.e("MA TAMBAH", "namalayer --> " + namalayer);
+            //Log.e("MA TAMBAH", "nama asli --> " + namaasli);
+            //Log.e("MA TAMBAH", "SUDAH --> " + String.valueOf(dbkml.getSudah()));
+            Log.e("MA TAMBAH", "Mau ADD 1 --> " + namaasli + ":::Jumlah layer --> " + String.valueOf(kmllayerlist.size()));
+            if( dbkml.getSudah() == 1) {
+                File file=new File(getExternalFilesDir(null), namaasli);
+                Log.e("MA TAMBAH", "Mau ADD 2 --> " + String.valueOf(file) + ":::Jumlah layer --> " + String.valueOf(kmllayerlist.size()));
+                if( file.exists()) {
+                    Log.e("MA TAMBAH", "Mau ADD 3 --> " + String.valueOf(file) + ":::Jumlah layer --> " + String.valueOf(kmllayerlist.size()));
                     InputStream kmlInputStream = new FileInputStream(file);
-                    KmlLayer layer = new KmlLayer(mMap, kmlInputStream, getApplicationContext());
-                    try {
-                        layer.addLayerToMap();
-                        sws_db.DBKML_UpdateTampil(idkml, 1);
-                        Log.e("MA TAMBAH", String.valueOf(idkml) + " --> " + String.valueOf(layer));
-                        kmllayerlist.add(layer);
-                        kmlnama.add(namalayer);
-                        kmlidlist.add(idkml);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                        Log.e("MA IO", e.getMessage());
-                    } catch (XmlPullParserException e) {
-                        Log.e("MA XML", e.getMessage());
-                        e.printStackTrace();
-                    }
+                    //KmlLayer layer = new KmlLayer(mMap, kmlInputStream, getApplicationContext());
+                    KmlLayer layer = new KmlLayer(mMap, kmlInputStream, getApplicationContext(), markerManager, polygonManager,
+                            polylineManager, groundOverlayManager, null);
+                    layer.addLayerToMap();
+                    sws_db.DBKML_UpdateTampil(idkml, 1);
+                    kmllayerlist.add(layer);
+                    kmlnama.add(namalayer);
+                    kmlidlist.add(idkml);
+                    layer.setOnFeatureClickListener(new KmlLayer.OnFeatureClickListener() {
+                        @Override
+                        public void onFeatureClick(Feature feature) {
+                            if( feature.getProperty("description") != null ) {
+                                String atext = feature.getProperty("description");
+                                atext = atext.replace("<![CDATA[", "");
+                                atext = atext.replace("]]>", "");
+                                Dialog info_window;
+                                info_window = new Dialog(MapsActivity.this);
+                                // Set GUI of login screen
+                                info_window.setContentView(R.layout.frm_info_map);
+                                info_window.setTitle("Info Peta");
+                                WebView iwtv;
+                                iwtv = (WebView) info_window.findViewById(R.id.info_map_tv);
+                                iwtv.loadData(atext, "text/html; charset=UTF-8", null);
+                                info_window.show();
+                            }
+
+                        }
+                    });
+                    Log.e("MA TAMBAH", "ID KML --> " + String.valueOf(idkml) + " :::Jumlah layer --> " + String.valueOf(kmllayerlist.size()));
                 }
             }
         }
